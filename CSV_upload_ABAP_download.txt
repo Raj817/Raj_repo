@@ -1,0 +1,109 @@
+*&---------------------------------------------------------------------*
+*& Report  ZCSV
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+report  zcsv.
+
+
+parameters: p_file type localfile.
+
+at selection-screen on value-request for p_file.
+  data: lt_files type filetable,
+        lv_count type i,
+        lw_file  type file_table,
+        lo_gui  type ref to cl_gui_frontend_services.
+
+
+  create object lo_gui.
+  lo_gui->file_open_dialog(
+  exporting
+      initial_directory = 'C:\'
+*      file_filter       = '(*.TXT)|*.TXT|(*.XLS)|*.XLS)|'
+      file_filter       = '(*.*)|*.*'
+  changing
+      file_table = lt_files
+      rc = lv_count ).
+  if lv_count <> 0.  "there should only be one record in this case
+    loop at lt_files into lw_file.
+      p_file = lw_file-filename.
+      exit.
+    endloop.
+  endif.
+
+
+
+
+start-of-selection.
+
+
+  data: lv_path type string,
+        lv_data type string.
+  data: lo_csv type ref to cl_rsda_csv_converter,
+        lt_upload_data type textline_t.
+
+  lv_path = p_file.
+  call method cl_rsda_csv_converter=>create
+*  EXPORTING
+*    i_delimiter = C_DEFAULT_DELIMITER
+*    i_separator = C_DEFAULT_SEPARATOR
+    receiving
+      r_r_conv    = lo_csv
+      .
+
+
+  call method cl_gui_frontend_services=>gui_upload
+    exporting
+      filename                = lv_path
+      filetype                = 'ASC'
+      has_field_separator     = abap_true
+    changing
+      data_tab                = lt_upload_data
+    exceptions
+      file_open_error         = 1
+      file_read_error         = 2
+      no_batch                = 3
+      gui_refuse_filetransfer = 4
+      invalid_type            = 5
+      no_authority            = 6
+      unknown_error           = 7
+      bad_data_format         = 8
+      header_not_allowed      = 9
+      separator_not_allowed   = 10
+      header_too_long         = 11
+      unknown_dp_error        = 12
+      access_denied           = 13
+      dp_out_of_memory        = 14
+      disk_full               = 15
+      dp_timeout              = 16
+      not_supported_by_gui    = 17
+      error_no_gui            = 18
+      others                  = 19.
+  if sy-subrc <> 0.
+* Display error message "Error reading file."
+    message i347(zz).
+    leave list-processing.
+  endif.
+
+  data : lw_struct type ztest_struc.
+
+
+  loop at lt_upload_data into lv_data.
+
+* Easiest, split at comma
+*    split lv_data at ',' into lw_struct-test1 lw_struct-test2 lw_struct-test3.
+
+    CALL METHOD lo_csv->csv_to_structure
+      EXPORTING
+        i_data   = lv_data
+      IMPORTING
+        e_s_data = lw_struct.
+
+    write:/ lw_struct-test1,
+            lw_struct-test2,
+            lw_struct-test3.
+
+  endloop.
